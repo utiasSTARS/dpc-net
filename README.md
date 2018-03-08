@@ -1,5 +1,5 @@
 # DPC-Net: Deep Pose Correction for Visual Localization
-DPC-Net learns SE(3) corrections to classical geometric and probabilistic visual localization pipelines (e.g., visual odometry).
+Code for [Dense Pose Corrections](https://arxiv.org/abs/1709.03128). DPC-Net learns SE(3) corrections to classical geometric and probabilistic visual localization pipelines (e.g., visual odometry). 
 
 <img src="https://raw.githubusercontent.com/utiasSTARS/dpc-net/master/dpc_high_level.png" width="500px"/>
 
@@ -29,10 +29,15 @@ To train DPC-Net, you need two things:
 ### Using KITTI data
 To use the [KITTI odometry benchmark](http://www.cvlibs.net/datasets/kitti/eval_odometry.php) to train DPC-Net, you can use ``train_dpc_net.py``.
 
-##  Citation
->*DPC-Net: Deep Pose Correction for Visual Localization*  
-**Valentin Peretroukhin and Jonathan Kelly**   
-Submitted to ICRA 2018 + RA-L  
-Pre-print available: [arXiv:1709.03128](https://arxiv.org/abs/1709.03128)
-
-##  References
+## Citation
+If you use this code in your research, please cite:
+```
+@article{2018_Peretroukhin_DPC,
+  author = {Valentin Peretroukhin and Jonathan Kelly},
+  doi = {10.1109/LRA.2017.2778765},
+  journal = {{IEEE} Robotics and Automation Letters},
+  link = {https://arxiv.org/abs/1709.03128},
+  title = {{DPC-Net}: Deep Pose Correction for Visual Localization},
+  year = {2018}
+}
+```

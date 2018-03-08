@@ -8,12 +8,13 @@ import csv
 
 import torch
 import torch.nn as nn
-import torch.backends.cudnn as cudnn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision import transforms
+#Turn off CuDNN due to some unknown convolution bug causing past models not to work properly
+torch.backends.cudnn.enabled = False
 
 from liegroups.numpy import SE3, SO3
 
@@ -39,15 +40,23 @@ def main():
     epoch = args.epoch
     correction_type = args.corr
 
-    trained_models_base_path = '/media/raid5-array/experiments/test-dpc-oss/trained_models/'
-    vo_results_base_path = '/media/raid5-array/experiments/test-dpc-oss/results/'
-
+    paths = {
+        #Folder that contains the trained models (this folder should contain a subfolder named 'pose' with the trained model. e.g., pose/seq_00_epoch_11_best.pth.tar)
+        'trained_models': '/media/raid5-array/experiments/dpc-oss/trained_models/',
+        #Where to put the results of the new, corrected (but not pose-graph-relaxed, VO)
+        'vo_results': '/media/raid5-array/experiments/dpc-oss/results/',
+        #Where are the test VO files? (e.g, kitti_pose_error_data_test_00.pickle, 2011_10_03_drive_0027.mat)
+        'kitti_vo': '/media/raid5-array/experiments/dpc-oss/kitti_training_data/', 
+        #Where is the base folder for KITTI images? (e.g., If a sample image is '/kitti/2011_10_03/2011_10_03_drive_0027_sync/image_02/data/0000001408.png', supply the path '/kitti/')
+        'kitti_img': '/media/m2-drive/datasets/KITTI/raw/'
+    }
+    
     if correction_type == 'pose':
-        trained_models_dir = trained_models_base_path + 'pose'
+        trained_models_dir = paths['trained_models'] + 'pose'
     elif correction_type == 'rotation':
-       trained_models_dir = trained_models_base_path + 'rotation'
+       trained_models_dir = paths['trained_models'] + 'rotation'
     elif correction_type == 'yaw':
-       trained_models_dir = trained_models_base_path + 'yaw'
+       trained_models_dir = paths['trained_models'] + 'yaw'
     else:
         raise ValueError('Correction type must be either `rot` or `pose` or `yaw`.')    
 
@@ -60,7 +69,7 @@ def main():
     #Run tests and collect stats
     stats_list = []
     for seq in test_seqs:
-        test_stats, tm_dict = run_test(seq, epoch, correction_type, 'sparse', trained_models_base_path, vo_results_base_path)
+        test_stats, tm_dict = run_test(seq, epoch, correction_type, 'sparse', paths)
         stats_list.append([
             seq,
             test_stats['avg_test_loss'],
@@ -98,37 +107,39 @@ def main():
    
 
 
-def run_test(kitti_test_seq, epoch, correction_type, est_type, trained_models_base_path, vo_results_base_path):
+def run_test(kitti_test_seq, epoch, correction_type, est_type, paths):
 
     est_type_folders = {'sparse': ''}
     est_type_vo_folders = {'sparse': 'corrected'}
 
 
     if correction_type == 'pose':
-        trained_models_dir = trained_models_base_path + est_type_folders[est_type] + 'pose'
+        trained_models_dir = paths['trained_models'] + est_type_folders[est_type] + 'pose'
     elif correction_type == 'rotation':
-       trained_models_dir = trained_models_base_path + est_type_folders[est_type] + 'rotation'
+       trained_models_dir = paths['trained_models'] + est_type_folders[est_type] + 'rotation'
     elif correction_type == 'yaw':
-       trained_models_dir = trained_models_base_path + est_type_folders[est_type] + 'yaw'
+       trained_models_dir = paths['trained_models'] + est_type_folders[est_type] + 'yaw'
     else:
         raise ValueError('Correction type must be either `rot` or `pose` or `yaw`.')    
     
     if epoch > 0:
         kitti_test_trained_model_path = os.path.join(trained_models_dir, 'seq_{}_epoch_{}.pth.tar'.format(kitti_test_seq,epoch))
-        output_tm_mat_path = vo_results_base_path + '{}/seq_{}_corr_{}_epoch_{}.mat'.format(est_type_vo_folders[est_type],kitti_test_seq, correction_type, epoch)
+        output_tm_mat_path = paths['vo_results_base'] + '{}/seq_{}_corr_{}_epoch_{}.mat'.format(est_type_vo_folders[est_type],kitti_test_seq, correction_type, epoch)
     else:
         #Find the best epoch
         kitti_test_trained_model_path = glob.glob(os.path.join(trained_models_dir, 'seq_{}_epoch_*_best*'.format(kitti_test_seq)))[0]
         #Extract epoch
         epoch = kitti_test_trained_model_path.split('/')[-1].split('_')[3]
         print('Detected epoch {} as the best one.'.format(epoch))
-        output_tm_mat_path = vo_results_base_path + '{}/seq_{}_corr_{}_epoch_{}.mat'.format(est_type_vo_folders[est_type], kitti_test_seq, correction_type, epoch)
+        output_tm_mat_path = paths['vo_results'] + '{}/seq_{}_corr_{}_epoch_{}.mat'.format(est_type_vo_folders[est_type], kitti_test_seq, correction_type, epoch)
 
     saved_data = torch.load(kitti_test_trained_model_path)
     train_config = saved_data['train_config']
     system_config = saved_data['system_config']
     kitti_config = saved_data['kitti_config']
 
+
+    #system_config['use_cuda'] = False
     
     if not train_config['img_dims']:
         resized_img_dims = [round(1226*train_config['resize_factor']), round(370*train_config['resize_factor'])]
@@ -143,11 +154,16 @@ def run_test(kitti_test_seq, epoch, correction_type, est_type, trained_models_ba
                                     std=train_config['img_transforms']['std']) 
     ])
 
-
+    
     #Make sure shuffle is off so we can run our error calculations!
-    test_loader = DataLoader(KITTIOdometryDataset(kitti_config['kitti_data_file'], img_type=train_config['img_type'], transform_img=transform_img, run_type='test'), 
+    test_loader = DataLoader(KITTIOdometryDataset(kitti_config['kitti_data_file'], img_type=train_config['img_type'], transform_img=transform_img, run_type='test', remap_kitti_folder=paths['kitti_img']), 
                         batch_size=32,
                         shuffle=False, num_workers=6)
+
+
+    kitti_config['kitti_data_file'] = remap_path(kitti_config['kitti_data_file'], paths['kitti_vo'])
+    test_loader.dataset.tm_mat_path = remap_path(test_loader.dataset.tm_mat_path, paths['kitti_vo'])
+    
 
     if correction_type == 'pose':
         pose_corrector_net = DeepPoseCorrectorStereoFullPose()
@@ -176,7 +192,7 @@ def run_test(kitti_test_seq, epoch, correction_type, est_type, trained_models_ba
         loss_fn = loss_fn.cuda()
 
     #This tells cudnn to search for the most efficient convolutional algorithms (i.e. voodoo magic that may make things faster)
-    cudnn.benchmark = True
+    #cudnn.benchmark = True
 
     #Test!
     #Return test_stats

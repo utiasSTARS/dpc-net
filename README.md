@@ -8,7 +8,7 @@ Code for [Dense Pose Corrections](https://arxiv.org/abs/1709.03128). DPC-Net lea
 
 1. Ensure that [pytorch](http://pytorch.org) is installed on your machine. We perform all training and testing on a a GTX Titan X (Maxwell) with 12GiB of memory.
 
-2. Install pyslam and lie_groups (links coming soon...). We use pyslam's ``TrajectoryMetrics`` class to store computed trajectories, and use it to compute pose graph relaxations.
+2. Install *pyslam* and lie_groups (links coming soon...). We use pyslam's ``TrajectoryMetrics`` class to store computed trajectories, and use it to compute pose graph relaxations.
 
 2. Clone DPC-net:
 ```
@@ -16,10 +16,13 @@ git clone https://github.com/utiasSTARS/dpc-net
 ```
 
 ## Testing with pre-trained model on KITTI data
-1. Run ``test_dpc_net.py --seqs 00 --corr pose``.
+1. Download pre-trained models and stats for a sample estimator (we use libviso2). Links coming soon.
 
-1. Run ``test_dpc_net.py --seqs 00 --corr pose``.
+2. Open and edit the appropriate variables (mostly paths) in ``test_dpc_net.py``.
 
+3. Run ``test_dpc_net.py --seqs 00 --corr pose``.
+
+Note that this code does not include the pose graph relaxation, and as a result the statistics it outputs are based on a simple correction model (where in between poses are left untouched).
 
 ## Training
 To train DPC-Net, you need two things:
@@ -27,7 +30,7 @@ To train DPC-Net, you need two things:
 2. A set of images (stereo or mono, depending on whether the correction is SO(3) or SE(3)) from which the model can learn corrections.
 
 ### Using KITTI data
-To use the [KITTI odometry benchmark](http://www.cvlibs.net/datasets/kitti/eval_odometry.php) to train DPC-Net, you can use ``train_dpc_net.py``.
+To use the [KITTI odometry benchmark](http://www.cvlibs.net/datasets/kitti/eval_odometry.php) to train DPC-Net, you can use the scripts ``train_dpc_net.py`` and ``create_kitti_training_data.py`` as starting points. If you use our framework, you'll need to save your estimator's poses in a ``TrajectoryMetrics`` object.
 
 ## Citation
 If you use this code in your research, please cite:

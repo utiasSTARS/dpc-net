@@ -62,10 +62,18 @@ KITTI_SEQS_DICT = {'00': {'date': '2011_10_03',
             'drive': '0034',
             'frames': range(0, 1201)}}
 
+def remap_path(full_filepath, new_folder, keep_folder_depth=1):
+    if keep_folder_depth == 1:
+        filename = full_filepath.split('/')[-1]
+    else:
+        filename = '/'.join(full_filepath.split('/')[-keep_folder_depth:])
+
+    return new_folder + '/' + filename
+
 class KITTIOdometryDataset(Dataset):
     """KITTI Odometry Benchmark dataset."""
 
-    def __init__(self, kitti_data_pickle_file, img_type='rgb', transform_img=None, run_type='train'):
+    def __init__(self, kitti_data_pickle_file, img_type='rgb', transform_img=None, run_type='train', remap_kitti_folder=None):
         """
         Args:
             kitti_data_pickle_file (string): Path to saved kitti dataset pickle.
@@ -76,6 +84,7 @@ class KITTIOdometryDataset(Dataset):
         self.transform_img = transform_img
         self.img_type = img_type
         self.load_kitti_data(run_type) #Loads self.image_quad_paths and self.labels
+        self.remap_kitti_folder = remap_kitti_folder
 
     def load_kitti_data(self, run_type):
         with open(self.pickle_file, 'rb') as handle:
@@ -118,7 +127,11 @@ class KITTIOdometryDataset(Dataset):
         return len(self.image_quad_paths)
 
     def read_image(self, img_path):
-        img = Image.open(img_path).convert('RGB')
+        if self.remap_kitti_folder:
+            new_img_path = remap_path(img_path, self.remap_kitti_folder, keep_folder_depth=5)
+            img = Image.open(new_img_path).convert('RGB')
+        else:
+            img = Image.open(img_path).convert('RGB')
         return img
 
     def __getitem__(self, idx):

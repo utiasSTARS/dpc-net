@@ -8,7 +8,7 @@ Code for [Dense Pose Corrections](https://arxiv.org/abs/1709.03128). DPC-Net lea
 
 1. Ensure that [pytorch](http://pytorch.org) is installed on your machine. We perform all training and testing on a a GTX Titan X (Maxwell) with 12GiB of memory.
 
-2. Install *pyslam* and lie_groups (links coming soon...). We use pyslam's ``TrajectoryMetrics`` class to store computed trajectories, and use it to compute pose graph relaxations.
+2. Install [pyslam](https://github.com/utiasSTARS/pyslam) and [liegroups](https://github.com/utiasSTARS/liegroups). We use pyslam's ``TrajectoryMetrics`` class to store computed trajectories, and use it to compute pose graph relaxations.
 
 2. Clone DPC-net:
 ```
@@ -16,7 +16,9 @@ git clone https://github.com/utiasSTARS/dpc-net
 ```
 
 ## Testing with pre-trained model on KITTI data
-1. Download pre-trained models and stats for a sample estimator (we use libviso2). Links coming soon.
+1. Download pre-trained models and stats for our sample estimator (based on [libviso2](http://www.cvlibs.net/software/libviso/)):
+
+``ftp://128.100.201.179/2017-dpc-net``
 
 2. Open and edit the appropriate variables (mostly paths) in ``test_dpc_net.py``.
 

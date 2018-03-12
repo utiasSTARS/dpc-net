@@ -18,7 +18,7 @@ git clone https://github.com/utiasSTARS/dpc-net
 ## Testing with pre-trained model on KITTI data
 1. Download pre-trained models and stats for our sample estimator (based on [libviso2](http://www.cvlibs.net/software/libviso/)):
 
-``ftp://128.100.201.179/2017-dpc-net``
+ftp://128.100.201.179/2017-dpc-net
 
 2. Open and edit the appropriate variables (mostly paths) in ``test_dpc_net.py``.
 

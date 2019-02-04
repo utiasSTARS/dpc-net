@@ -1,14 +1,30 @@
 import torch
-global EPS
-EPS=1e-12
+import numpy as np
 from liegroups.torch.so3 import SO3
 from liegroups.torch.se3 import SE3
+
+def allclose(mat1, mat2, tol=1e-10):
+    """Check if all elements of two tensors are close within some tolerance.
+
+    Either tensor can be replaced by a scalar.
+    """
+    return isclose(mat1, mat2, tol).all()
+
+
+def isclose(mat1, mat2, tol=1e-10):
+    """Check element-wise if two tensors are close within some tolerance.
+
+    Either tensor can be replaced by a scalar.
+    """
+    return (mat1 - mat2).abs_().lt(tol)
 
 
 def so3_wedge(phi):
     #Returns Nx3x3 tensor with each 1x3 row vector in phi wedge'd
+    if phi.dim() < 2:
+        phi = phi.unsqueeze(dim=0)
 
-    Phi = phi.new(phi.size(0), 3, 3).zero_()
+    Phi = phi.new_zeros(phi.shape[0], 3, 3)
 
     Phi[:, 0, 1] = -phi[:, 2]
     Phi[:, 1, 0] = phi[:, 2]
@@ -20,7 +36,10 @@ def so3_wedge(phi):
 
 def so3_vee(Phi):
     #Returns Nx3 tensor with each 3x3 lie algebra element converted to a 1x3 coordinate vector
-    phi = Phi.new(Phi.size(0), 3).zero_()
+    if Phi.dim() < 3:
+        Phi = Phi.unsqueeze(dim=0)
+    phi = Phi.new_zeros(Phi.shape[0], 3)
+
     phi[:, 0] = Phi[:, 2, 1]
     phi[:, 1] = Phi[:, 0, 2]
     phi[:, 2] = Phi[:, 1, 0]
@@ -53,22 +72,20 @@ def so3_log(R):
     axes[:,2] = R[:, 1, 0] - R[:, 0, 1]
 
 
-    # The sine of the rotation angle is half the norm of the axis
-    # This does not work well??
-    #sin_angles = 0.5 * vec_norms(axes)
-    #angles = torch.atan2(sin_angles, cos_angles)
-
     # The cosine of the rotation angle is related to the trace of C
-
     #NOTE: clamp ensures that we don't get any nan's due to out of range numerical errors
-    angles = torch.acos((0.5 * batch_trace(R) - 0.5).clamp(-1+EPS,1-EPS))
+    angles = torch.acos((0.5 * batch_trace(R) - 0.5).clamp(-1., 1.))
     sin_angles = torch.sin(angles)
     
     
 
     # If angle is close to zero, use first-order Taylor expansion
-    small_angles_mask = angles.lt(EPS).view(-1)
-    small_angles_num = small_angles_mask.sum()
+    small_angles_mask = isclose(angles, 0.).squeeze()
+    small_angles_num = small_angles_mask.sum().item()
+    pi_angles_mask = (np.pi - angles).lt(1e-5).view(-1)
+    if pi_angles_mask.any():
+       print('Warning - theta close to pi - may get erroneous SO3() logs!')
+
 
     #This tensor is used to extract the 3x3 R's that correspond to small angles
     small_angles_indices = small_angles_mask.nonzero().squeeze()
@@ -101,6 +118,12 @@ def so3_log(R):
         logs[small_angles_indices] = small_logs
 
 
+    # if pi_angles_mask.any():
+    #     I = R.new(3, 3).zero_()
+    #     I[0,0] = I[1,1] = I[2,2] = 1.0
+    #     I = I.expand(pi_angles_mask.sum(), 3,3)
+    #     logs[pi_angles_mask.nonzero().squeeze()] = PI*torch.ones(pi_angles_mask.sum(),3)*(0.57735026919) #diag(0.5*(R[pi_angles_mask] + I))
+
     return logs
 
 
@@ -119,8 +142,8 @@ def so3_exp(phi):
     I = I.expand(batch_size, 3,3) #I is now num_samplesx3x3
 
     # If angle is close to zero, use first-order Taylor expansion
-    small_angles_mask = angles.lt(EPS).view(-1)
-    small_angles_num = small_angles_mask.sum()
+    small_angles_mask = isclose(angles, 0.).squeeze()
+    small_angles_num = small_angles_mask.sum().item()
     small_angles_indices = small_angles_mask.nonzero().squeeze()
 
     if small_angles_num == batch_size:
@@ -144,9 +167,9 @@ def so3_exp(phi):
     R = c * I + (1 - c) * outer_prod_axes + s * so3_wedge(axes)
 
     if 0 < small_angles_num < batch_size:
-        I_small = I.expand(small_angles_num, 3,3)
+        I_small = I[:small_angles_num]
         phi_w = so3_wedge(phi[small_angles_indices])
-        small_exp = I + phi_w
+        small_exp = I_small + phi_w
         R[small_angles_indices] = small_exp
     
 
@@ -167,6 +190,8 @@ def vec_square_norms(input):
 def so3_inv_left_jacobian(phi):
     """Inverse left SO(3) Jacobian (see Barfoot).
     """
+    if phi.dim() < 2:
+        phi = phi.unsqueeze(dim=0)
 
     angles = vec_norms(phi)
     I = phi.new(3, 3).zero_()
@@ -174,8 +199,8 @@ def so3_inv_left_jacobian(phi):
     batch_size = phi.size(0)
 
     # If angle is close to zero, use first-order Taylor expansion
-    small_angles_mask = angles.lt(EPS).view(-1)
-    small_angles_num = small_angles_mask.sum()
+    small_angles_mask = isclose(angles, 0.).squeeze()
+    small_angles_num = small_angles_mask.sum().item()
     small_angles_indices = small_angles_mask.nonzero().squeeze()
 
     if small_angles_num == batch_size:
@@ -206,6 +231,8 @@ def so3_inv_left_jacobian(phi):
 def so3_left_jacobian(phi):
     """Inverse left SO(3) Jacobian (see Barfoot).
     """
+    if phi.dim() < 2:
+        phi = phi.unsqueeze(dim=0)
 
     angles = vec_norms(phi)
     I = phi.new(3, 3).zero_()
@@ -213,8 +240,8 @@ def so3_left_jacobian(phi):
     batch_size = phi.size(0)
 
     # If angle is close to zero, use first-order Taylor expansion
-    small_angles_mask = angles.lt(EPS).view(-1)
-    small_angles_num = small_angles_mask.sum()
+    small_angles_mask = isclose(angles, 0.).squeeze()
+    small_angles_num = small_angles_mask.sum().item()
     small_angles_indices = small_angles_mask.nonzero().squeeze()
 
     if small_angles_num == batch_size:
@@ -321,13 +348,18 @@ def rpy_to_so3(rpy):
 #================================SE(3)====================================#
 def se3_wedge(xi):
     #Returns Nx4x4 tensor with each 1x6 row vector in xi SE(3) wedge'd
-    Xi = xi.new(xi.size(0), 4, 4).zero_()
-    rho = xi[:, 0:3]
-    phi = xi[:, 3:6]
+    if xi.dim() < 2:
+        xi = xi.unsqueeze(dim=0)
+        
+    n = xi.shape[0]
+    Xi = xi.new_zeros(n, 4, 4)
+
+    rho = xi[:, :3]
+    phi = xi[:, 3:]
     Phi = so3_wedge(phi)
 
-    Xi[:, 0:3, 0:3] = Phi
-    Xi[:, 0:3, 3:4] = rho
+    Xi[:, :3, :3] = Phi
+    Xi[:, :3, 3] = rho
     
     return Xi
 
@@ -358,26 +390,33 @@ def se3_log(T):
     #output: log(T) Nx6
 
     """
+    if T.dim() < 3:
+        T = T.unsqueeze(dim=0)
+
     R = T[:,0:3,0:3]
     t = T[:,0:3,3:4]
     sample_size = t.size(0)
     phi = so3_log(R)
     invl_js = so3_inv_left_jacobian(phi)
     rho = (invl_js.bmm(t)).view(sample_size, 3)
-    return torch.cat((rho, phi), 1)
+    return torch.cat((rho, phi), 1).squeeze()
 
 def se3_exp(xi):
     #input: xi Nx6
     #output: T Nx4x4
     #New efficient way without having to compute Q!
-    batch_size = xi.size(0)
+
+    if xi.dim() < 2:
+        xi = xi.unsqueeze(dim=0)
+
+    batch_size = xi.shape[0]
     phi = vec_norms(xi[:, 3:6])
 
     I = xi.new(4, 4).zero_()
     I[0,0] = I[1,1] = I[2,2] = I[3,3] = 1.0
 
     # If angle is close to zero, use first-order Taylor expansion
-    small_angles_mask = phi.lt(EPS).view(-1)
+    small_angles_mask = isclose(phi, 0.).squeeze()
     small_angles_num = small_angles_mask.sum()
     small_angles_indices = small_angles_mask.nonzero().squeeze()
 
@@ -409,7 +448,7 @@ def se3_exp(xi):
     if 0 < small_angles_num < batch_size:
         I_small = I.expand(small_angles_num, 4,4)
         xi_w = se3_wedge(xi[small_angles_indices])
-        small_exp = I + xi_w
+        small_exp = I_small + xi_w
         T[small_angles_indices] = small_exp
     
     return T
@@ -435,8 +474,6 @@ def se3_Q(rho, phi):
     #See b
 
     ph = vec_norms(phi)
-
-    ph_test = phi.norm(p=2, dim=1)
 
     ph2 = ph*ph
     ph3 = ph2*ph
@@ -471,6 +508,9 @@ def se3_Q(rho, phi):
 
 def se3_left_jacobian(xi):
     """Computes SE(3) left jacobian of N xi vectors (arranged into NxD tensor)"""
+    if xi.dim() < 2:
+        xi = xi.unsqueeze(dim=0)
+
     rho = xi[:, 0:3]
     phi = xi[:, 3:6]
 
@@ -478,7 +518,7 @@ def se3_left_jacobian(xi):
     angles = vec_norms(xi[:, 3:6])
 
     # If angle is close to zero, use first-order Taylor expansion
-    small_angles_mask = angles.lt(EPS).view(-1)
+    small_angles_mask = isclose(angles, 0.).squeeze()
     small_angles_num = small_angles_mask.sum()
     small_angles_indices = small_angles_mask.nonzero().squeeze()
 
@@ -512,6 +552,9 @@ def se3_left_jacobian(xi):
 
 def se3_inv_left_jacobian(xi):
     """Computes SE(3) inverse left jacobian of N xi vectors (arranged into NxD tensor)"""
+    if xi.dim() < 2:
+        xi = xi.unsqueeze(dim=0)
+
     rho = xi[:, 0:3]
     phi = xi[:, 3:6]
 
@@ -519,7 +562,7 @@ def se3_inv_left_jacobian(xi):
     angles = vec_norms(xi[:, 3:6])
 
     # If angle is close to zero, use first-order Taylor expansion
-    small_angles_mask = angles.lt(EPS).view(-1)
+    small_angles_mask = isclose(angles, 0.).squeeze()
     small_angles_num = small_angles_mask.sum()
     small_angles_indices = small_angles_mask.nonzero().squeeze()
 
@@ -546,5 +589,23 @@ def se3_inv_left_jacobian(xi):
         small_inv_J =  I - 0.5*se3_curly_wedge(xi[small_angles_indices])
         inv_J[small_angles_indices] = small_inv_J
 
-
     return inv_J
+
+
+def se3_adjoint(T):
+    if T.dim() < 2:
+        T = T.unsqueeze(dim=0)
+    
+    C = T[:, :3, :3]
+    Jrho_wedge = so3_wedge(T[:, :3, 3].view(-1, 3))
+
+    adj_T = T.new_zeros((T.shape[0], 6,6))
+    adj_T[:, :3, :3] = C
+    adj_T[:, :3, 3:] = Jrho_wedge.bmm(C)
+    adj_T[:, 3:, 3:] = C
+
+    return adj_T
+    
+
+
+    

@@ -148,7 +148,7 @@ def so3_exp(phi):
 
     if 0 < small_angles_num < batch_size:
         I_small = I.expand(small_angles_num, 3,3)
-        phi_w = so3_wedge(phi[small_angles_indices])
+        phi_w = so3_wedge(phi[small_angles_indices].view(-1, 3))
         small_exp = I + phi_w
         R[small_angles_indices] = small_exp
     
@@ -201,7 +201,7 @@ def so3_inv_left_jacobian(phi):
 
     if 0 < small_angles_num < batch_size:
         I_small = I.expand(small_angles_num, 3,3)
-        small_invJ = I_small - 0.5*so3_wedge(phi[small_angles_indices])
+        small_invJ = I_small - 0.5*so3_wedge(phi[small_angles_indices].view(-1, 3))
         invJ[small_angles_indices] = small_invJ
 
     return invJ
@@ -244,7 +244,7 @@ def so3_left_jacobian(phi):
 
     if 0 < small_angles_num < batch_size:
         I_small = I.expand(small_angles_num, 3,3)
-        small_J = I_small + 0.5*so3_wedge(phi[small_angles_indices])
+        small_J = I_small + 0.5*so3_wedge(phi[small_angles_indices].view(-1, 3))
         J[small_angles_indices] = small_J
 
     return J
@@ -420,7 +420,7 @@ def se3_exp(xi):
     
     if 0 < small_angles_num < batch_size:
         I_small = I.expand(small_angles_num, 4,4)
-        xi_w = se3_wedge(xi[small_angles_indices])
+        xi_w = se3_wedge(xi[small_angles_indices].view(-1, 6))
         small_exp = I + xi_w
         T[small_angles_indices] = small_exp
     
@@ -519,7 +519,7 @@ def se3_left_jacobian(xi):
         I = xi.new(6, 6).zero_()
         I[0,0] = I[1,1] = I[2,2] = I[3,3] = I[4,4] = I[5,5] =  1.0
         I = I.expand(small_angles_num, 6,6) 
-        small_J =  I + 0.5*se3_curly_wedge(xi[small_angles_indices])
+        small_J =  I + 0.5*se3_curly_wedge(xi[small_angles_indices].view(-1, 6))
         J[small_angles_indices] = small_J
 
     return J
@@ -559,7 +559,7 @@ def se3_inv_left_jacobian(xi):
         I = xi.new(6, 6).zero_()
         I[0,0] = I[1,1] = I[2,2] = I[3,3] = I[4,4] = I[5,5] =  1.0
         I = I.expand(small_angles_num, 6,6) 
-        small_inv_J =  I - 0.5*se3_curly_wedge(xi[small_angles_indices])
+        small_inv_J =  I - 0.5*se3_curly_wedge(xi[small_angles_indices].view(-1, 6))
         inv_J[small_angles_indices] = small_inv_J
 
 
